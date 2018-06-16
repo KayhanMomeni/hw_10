@@ -1,0 +1,1230 @@
+---
+title: "Cluster Analysis"
+subtitle: "WDI Indicators"
+author: "Kayhan Momeni"
+date: "18 Khordad 1397"
+output:
+  prettydoc::html_pretty:
+    fig_width: 10
+    theme: leonids
+    highlight: github
+---
+
+<div align="center">
+<img  src="images/best_hans_talks_1200x627.jpg"  align = 'center'>
+</div>
+
+> <p dir="RTL"> 
+با توجه به داده بانک جهانی به سوالات زیر پاسخ دهید. برای استفاده از داده از سه فایل زیر استفاده نمایید.
+داده نام کشورها: WDICountry
+داده نام سری های زمانی: WDISeries
+داده کل: WDIData
+در صورتی که داده را در اختیار ندارید می توانید از بسته WDI استفاده نموده و داده های مورد نظر را استخراج نمایید.
+</p>
+
+***
+
+<p dir="RTL">
+داده های مربوط به شاخص های مختلف کشورها، از سایت بانک جهانی قابل دسترس است:
+</p>
+<p dir="RTL">
+[دانلود شاخص ها](https://datacatalog.worldbank.org/dataset/world-development-indicators)
+</p>
+<p dir="RTL">
+پس از دانلود، ابتدا داده ها را وارد می کنیم و پکیج های مورد نظر را صدا می زنیم:
+</p>
+```{r, eval=FALSE}
+library(dplyr)
+library(readr)
+library(highcharter)
+library(tidyr)
+library(stringr)
+library(rlist)
+library(ggplot2)
+library(ggbiplot)
+library(ape)
+Data = read_csv("/Users/kayhan/Desktop/WDI_csv (1)/WDIData.csv")
+Series = read_csv("/Users/kayhan/Desktop/WDI_csv (1)/WDISeries.csv")
+```
+
+```{r include=FALSE, cache=FALSE}
+library(dplyr)
+library(readr)
+library(highcharter)
+library(tidyr)
+library(stringr)
+library(rlist)
+library(ggplot2)
+library(ggbiplot)
+library(ape)
+Data = read_csv("/Users/kayhan/Desktop/WDI_csv (1)/WDIData.csv")
+Series = read_csv("/Users/kayhan/Desktop/WDI_csv (1)/WDISeries.csv")
+```
+***
+
+<h5 dir="RTL">
+۱. ده کشور فقیر دنیا را بیابید. نمودار درآمد روزانه آنها را رسم کنید. چند درصد از اعضای این کشورها زیر خط فقر هستند؟ متوسط عمر در این کشورها چقدر است؟
+</h5>
+<h6 dir="RTL">
+پاسخ:
+</h6>
+<p dir="RTL">
+نکته: میانگین سال های ۲۰۰۷ تا ۲۰۱۷ به عنوان نماینده ی هر شاخص در نظر گرفته میشود.
+</p>
+<p dir="RTL">
+از شاخص «سرانه تولید ناخالص داخلی» به عنوان معیاری برای ثروتمندی افراد یک جامعه استفاده میکنیم. کد این شاخص 
+NY.GDP.PCAP.CD 
+است.
+</p>
+
+```{r, warning=FALSE}
+Data %>%
+  filter(`Indicator Code`=="NY.GDP.PCAP.CD") %>%
+  mutate(`GDP per capita` = rowMeans(select(., `2007`:`2017`),
+                                     na.rm = T)) %>%
+  select(`Country Name`, `GDP per capita`) -> tmp1
+```
+
+<p dir="RTL">
+فقیرترین کشورها بر اساس پایین بودن سرانه تولید ناخالص داخلی:
+</p>
+```{r, warning=FALSE}
+tmp1 %>%
+  arrange(`GDP per capita`)
+```
+
+<p dir="RTL">
+برای اندازه گیری میزان درآمد افراد هم از شاخص «سرانه درآمد» استفاده می کنیم که کد آن 
+NY.GNP.PCAP.CD 
+است:
+</p>
+```{r, warning=FALSE}
+Data %>%
+  filter(`Indicator Code`=="NY.GNP.PCAP.CD") %>%
+  mutate(`GNI per capita` = rowMeans(select(., `2007`:`2017`),
+                                     na.rm = T)) %>%
+  select(`Country Name`, `GNI per capita`) -> tmp2
+```
+
+<p dir="RTL">
+همچنین شاخص دیگری وجود دارد به نام 
+GNI-per-capita-PPP. 
+این شاخص درواقع مشابه همان درآمد سرانه است اما بر اساس قدرت خرید نرمال شده است:
+</p>
+```{r, warning=FALSE}
+Data %>%
+  filter(`Indicator Code`=="NY.GNP.PCAP.PP.CD") %>%
+  mutate(`GNI per capita - PPP` = rowMeans(select(., `2007`:`2017`),
+                                           na.rm = T)) %>%
+  select(`Country Name`, `GNI per capita - PPP`) -> tmp3
+```
+
+<p dir="RTL">
+این داده ها را با داده های مربوط به «امید به زندگی» و «درصد افراد زیر خط فقر» ادغام میکنیم:
+</p>
+
+```{r, warning=FALSE}
+Data %>%
+  filter(`Indicator Code`=="SI.POV.NAHC") %>%
+  mutate(`Poverty Headcount Ratio` = rowMeans(select(., `2007`:`2017`),
+                                              na.rm = T)) %>%
+  select(`Country Name`, `Poverty Headcount Ratio`) -> tmp4
+
+Data %>%
+  filter(`Indicator Code`=="SP.DYN.LE00.IN") %>%
+  mutate(`Life Expectenty` = rowMeans(select(., `2007`:`2017`),
+                                      na.rm = T)) %>%
+  select(`Country Name`, `Life Expectenty`) -> tmp5
+
+
+merge(tmp1, merge(tmp2, merge(tmp3, merge(tmp4, tmp5,
+                                          by="Country Name"), 
+                              by="Country Name"),
+                  by="Country Name"),
+      by="Country Name") %>%
+  arrange(`GDP per capita`) %>%
+  .[1:10,] %>%
+  mutate(`Average Daily Income`=`GNI per capita`/365,
+         `Average Daily Income - PPP`=`GNI per capita - PPP`/365) -> tmp
+```
+
+<p dir="RTL">
+میانگین درامد روزانه مردم این کشورها:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  arrange(`Average Daily Income`) %>%
+  hchart(hcaes(x=`Country Name`, y=`Average Daily Income`),
+         type="column", name="Average Daily Income") %>%
+  hc_xAxis(title = list(text = "Country")) %>%
+  hc_yAxis(title = list(text = "Average Daily Income ($)")) %>%
+  hc_add_theme(hc_theme_ffx())
+```
+<p dir="RTL">
+اگر درآمد نرمال شده با قدرت خرید را هم بخواهیم:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  arrange(`Average Daily Income - PPP`) %>%
+  hchart(hcaes(x=`Country Name`, y=`Average Daily Income - PPP`),
+         type="column", name="Average Daily Income") %>%
+  hc_xAxis(title = list(text = "Country")) %>%
+  hc_yAxis(title = list(text = "Average Daily Income ($)")) %>%
+  hc_add_theme(hc_theme_ffx())
+```
+<p dir="RTL">
+درصد افراد زیرخط فقر:
+</p>
+
+```{r, warning=FALSE}
+tmp %>%
+  arrange(`Poverty Headcount Ratio`) %>%
+  hchart(hcaes(x=`Country Name`, y=`Poverty Headcount Ratio`),
+         type="column", name="Poverty Headcount Ratio") %>%
+  hc_xAxis(title = list(text = "Country")) %>%
+  hc_add_theme(hc_theme_ffx())
+```
+
+<p dir="RTL">
+امید به زندگی:
+</p>
+
+```{r, warning=FALSE}
+tmp %>%
+  arrange(`Life Expectenty`) %>%
+  hchart(hcaes(x=`Country Name`, y=`Life Expectenty`),
+         type="column", name="Life Expectenty") %>%
+  hc_xAxis(title = list(text = "Country")) %>%
+  hc_add_theme(hc_theme_ffx())
+```
+
+
+***
+
+<h5 dir="RTL">
+۲. تراژدی روآندا: بر اساس داده های امید به زندگی ابتدا نمودار سالانه نمودار جعبه ایی امید به زندگی کشورها را رسم نمایید(در یک نمودار!). سپس سری زمانی امید به زندگی روآندا را به آن اضافه کنید. چه می بینید؟ چند میلیون نفر کشته شدند؟
+</h5>
+<h6 dir="RTL">
+پاسخ:
+</h6>
+
+<p dir="RTL">
+ابتدا داده های مربوط به امید به زندگی را به ازای هر کشور و هر سال استخراج میکنیم:
+</p>
+```{r, warning=FALSE}
+Data %>%
+    filter(`Indicator Code`=="SP.DYN.LE00.IN") %>%
+    select(`Country Name`, `1960`:`2017`) %>%
+    gather(`Year`, `Life Expectenty`, -`Country Name`) -> tmp
+```
+<p dir="RTL">
+داده های کشور روآندا را هم جدا میکنیم:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(`Country Name`=="Rwanda") -> tmp2
+```
+<p dir="RTL">
+حالا نمودار جعبه ای امید به زندگی را در دنیا به ازای سال های مختلف رسم میکنیم و نمودار امید به زندگی روآندا را هم به صورت یک سری زمانی به آن اضافه میکنیم:
+</p>
+```{r, warning=FALSE}
+hcboxplot(x = tmp$`Life Expectenty`, var = tmp$`Year`,
+          outliers = FALSE, name="International Life Expectenty") %>% 
+  hc_chart(type = "column") %>%
+  hc_add_series(tmp2$`Life Expectenty`, type="spline", name="Rwanda's Life Expectenty") %>%
+  hc_xAxis(title = list(text = "Year")) %>%
+  hc_yAxis(title = list(text = "Life Expectenty (Years)")) %>%
+  hc_add_theme(hc_theme_ffx())
+```
+<p dir="RTL">
+نسل کشی روآندا که در سال ۱۹۹۴ اتفاق افتاد در نمودار کاملا مشهود است. در این نسل کشی ۸۰۰هزار مرد و زن و کودک کشته شدند و به ۲۰۰ تا ۵۰۰ هزار زن، تجاوز جنسی شد.
+</p>
+***
+
+<h5 dir="RTL">
+۳. نمودار امید به زندگی و هزینه های بهداشتی را رسم کنید. چه نتیجه ایی می گیرید؟
+</h5>
+
+<h6 dir="RTL">
+پاسخ:
+</h6>
+
+<p dir="RTL">
+داده های مربوط به شاخص «امید به زندگی» و «سرانه بودجه سلامتی» را برای سال ۲۰۱۵ استخراج میکنیم:
+</p>
+
+```{r, warning=FALSE}
+Data %>%
+  filter(`Indicator Code`=="SP.DYN.LE00.IN") %>%
+  mutate(`Life Expectenty` = `2015`) %>%
+  select(`Country Name`, `Life Expectenty`) -> tmp1
+
+Data %>%
+  filter(`Indicator Code`=="SH.XPD.CHEX.PC.CD") %>%
+  mutate(`Health Expenditure per capita` = `2015`) %>%
+  select(`Country Name`, `Health Expenditure per capita`) -> tmp2
+
+tmp = merge(tmp1, tmp2, by="Country Name")
+```
+<p dir="RTL">
+حالا میتوانیم امیدبه زندگی را برحسب سرانه بهداشت برای کشورهای مختلف رسم کنیم:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  arrange(`Health Expenditure per capita`) %>%
+  na.omit()%>%
+  hchart(hcaes(x=`Health Expenditure per capita`, y=`Life Expectenty`,
+               group=`Country Name`), type="scatter") %>%
+  hc_add_theme(hc_theme_ffx())
+```
+
+<p dir="RTL">
+برای بررسی بهتر، میتوان از لیبل مربوط به نام کشورها صرف نظر کرد:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  arrange(`Health Expenditure per capita`) %>%
+  na.omit()%>%
+  hchart(hcaes(x=`Health Expenditure per capita`, y=`Life Expectenty`), type="scatter") %>%
+  hc_add_theme(hc_theme_ffx())
+```
+<p dir="RTL">
+به نظر میرسد با افزایش بودجه ی بهداشت و سلامت، امید به زندگی در جامعه افزایش می یابد.مخصوصا اگر بودجه سرانه بر  بهداشت و درمان کمتر از ۲ هزار دلار به ازای هر شخص باشد، افزایش آن تاثیر به سزایی دارد.
+</p>
+***
+
+<h5 dir="RTL">
+۴. آیا قدرت خرید خانواده های ایرانی در ۵۰ سال اخیر افزایش یافته است؟ برای این کار از داده های اقتصادی خانوار استفاده کنید.
+</h5>
+
+<h6 dir="RTL">
+پاسخ:
+</h6>
+
+<p dir="RTL">
+از شاخص 
+GNI(PPP)-per-capita 
+به عنوان معیاری از قدرت خرید مردم استفاده می کنیم. برای اطلاعات بیشتر در خصوص این شاخص:
+</p>
+<p dir="RTL">
+[اطلاعات بیشتر](https://www.indexmundi.com/facts/indicators/NY.GNP.PCAP.PP.CD)
+</p>
+<p dir="RTL">
+متاسفانه داده های مربوط به ایران از سال ۱۹۹۰ به بعد موجود است:
+</p>
+```{r, warning=FALSE}
+Data %>%
+  filter(`Country Code`=="IRN") -> tmp
+
+Series %>%
+  select(`Indicator Name`, Topic, `Long definition`)-> tmp2
+
+merge(tmp, tmp2, by="Indicator Name") %>%
+  select(`Country Name`, Topic, `Indicator Name`, `Indicator Code`, `Long definition`, `1970`:`2017`) -> tmp
+
+tmp %>%
+  filter(`Indicator Code`=="NY.GNP.PCAP.PP.CD") %>%
+  select(`1990`:`2016`) %>%
+  t()->tmp
+
+data.frame(Year = rownames(tmp), `GDP-per-capita-PPP`=tmp) -> tmp
+
+tmp %>%
+  hchart(hcaes(x=Year, y=GDP.per.capita.PPP), type="line", name="GDP per capita") %>%
+  hc_xAxis(title = list(text = "Year")) %>%
+  hc_yAxis(title = list(text = "GNI per capita, PPP (current international $)")) %>%
+  hc_add_theme(hc_theme_ffx())
+```
+
+<p dir="RTL">
+همانطور که مشخص است، قدرت خرید مردم از ۱۹۹۰ به بعد به طور میانگین در حال افزایش بوده است!
+</p>
+
+***
+
+<h5 dir="RTL">
+۵. رشد اقتصادی ایران را با کشورهای دیگر در طول ۲۰ سال گذشته بر حسب بیست شاخص های اقتصادی مهم مانند تولید ناخالص ملی، تورم و … ارزیابی کنید! (برای هر شاخص از تصویرسازی استفاده کنید.)
+</h5>
+<h6 dir="RTL">
+پاسخ:
+</h6>
+<p dir="RTL">
+شاخص هایی که میخواهیم بررسی کنیم عبارتند از:
+</p>
+1- Inflation, consumer prices
+</br>
+2- GDP
+</br>
+3- GDP growth
+</br>
+4- Foreign direct investment, net inflows
+</br>
+5- Foreign direct investment, net outflows
+</br>
+6- Stocks traded, total value
+</br>
+7- Manufacturing, value added
+</br>
+8- Industry, value added
+</br>
+9- Services, etc., value added
+</br>
+10- Agriculture, value added
+</br>
+11- Exports of goods and services
+</br>
+12- Imports of goods and services
+</br>
+13- Domestic credit to private sector
+</br>
+14- Real interest rate
+</br>
+15- Broad money
+</br>
+16- Net taxes on products
+</br>
+17- Employers, total
+</br>
+18- Employment to population ratio, 15+, total
+</br>
+19- Employment to population ratio, 15+, female
+</br>
+20- GINI index (World Bank estimate)
+
+<p dir="RTL">
+ابتدا کد شاخص ها را لیست میکنیم:
+</p>
+```{r, warning=FALSE}
+indicators = c("FP.CPI.TOTL.ZG", 
+               "NY.GDP.MKTP.CD",
+               "NY.GDP.MKTP.KD.ZG",
+               "BX.KLT.DINV.WD.GD.ZS",
+               "BM.KLT.DINV.WD.GD.ZS",
+               "CM.MKT.TRAD.GD.ZS",
+               "NV.IND.MANF.ZS",
+               "NV.IND.TOTL.ZS",
+               "NV.SRV.TETC.ZS",
+               "NV.AGR.TOTL.ZS",
+               "NE.EXP.GNFS.ZS",
+               "NE.IMP.GNFS.ZS",
+               "FS.AST.PRVT.GD.ZS",
+               "FR.INR.RINR",
+               "FM.LBL.BMNY.GD.ZS",
+               "NY.TAX.NIND.CD",
+               "SL.EMP.MPYR.ZS",
+               "SL.EMP.TOTL.SP.ZS",
+               "SL.EMP.TOTL.SP.FE.ZS",
+               "SI.POV.GINI")
+```
+<p dir="RTL">
+سپس در یک حلقه، سعی میکنیم برای هریک از شاخص های بالا، نمودارهایی مانند نمودار سوال ۲ تولید کنیم که وضعیت ایران را به صورت یک سری زمانی، با وضعیت سایر کشورها به صورت یک باکس-پلات مقایسه کند:
+</p>
+```{r, warning=FALSE}
+plot = function(i)
+{
+Code = indicators[i]
+  Data %>%
+    filter(`Indicator Code`==Code) %>%
+    select(`Indicator Name`, `Country Name`, `1990`:`2017`) %>%
+    gather(`Year`, `Value`, `1990`:`2017`) -> tmp
+  
+  tmp %>%
+    filter(`Country Name`=="Iran, Islamic Rep.") -> tmp2
+  
+  hcboxplot(x = tmp$`Value`, var = tmp$`Year`,
+            outliers = FALSE, name="World") %>% 
+    hc_chart(type = "column") %>%
+    hc_add_series(tmp2$`Value`, type="spline", name="Iran") %>%
+    hc_xAxis(title = list(text = "Year")) %>%
+    hc_yAxis(title = list(text = tmp$`Indicator Name`[1])) %>%
+    hc_add_theme(hc_theme_ffx())
+}
+```
+<p dir="RTL">
+حالا می توانیم مقایسه های اقتصادی را یکی یکی انجام دهیم. در شاخص تورم:
+</p>
+```{r}
+plot(1)
+```
+<p dir="RTL">
+همانطور که مشاهده میشود، وضعیت ایران در بخش تورم نسبت به سایر کشورهای دنیا خوب نیست. البته از این نمودار، 
+outlier 
+ها حذف شده اند.
+</p>
+<p dir="RTL">
+در بخش تولید ناخالص داخلی:
+</p>
+```{r, warning=FALSE}
+plot(2)
+```
+<p dir="RTL">
+که به دلیل وجود نفت، وضعیت 
+GDP 
+ایران از بسیاری از کشورها بهتر است اما با بزرگترین اقتصاد های دنیا بسیار فاصله دارد. رشد اقتصادی (رشد 
+GDP) 
+هم به صورت زیر است:
+</p>
+```{r, warning=FALSE}
+plot(3)
+```
+<p dir="RTL">
+که به دلیل نوسان قیمت نفت و وضعیت نامعلوم سیاسی ایران، بسیار نوسان دارد. در بحث سرمایه گذاری هم وضعیت ایران به صورت زیر است:
+</p>
+```{r, warning=FALSE}
+plot(4)
+```
+```{r, warning=FALSE}
+plot(5)
+```
+<p dir="RTL">
+در بخش بازار بورس، عملکرد ایران همواره در طی چند دهه ی اخیر ضعیف بوده است:
+</p>
+```{r, warning=FALSE}
+plot(6)
+```
+<p dir="RTL">
+سایر شاخص ها هم به صورت زیر است:
+</p>
+```{r, warning=FALSE}
+plot(7)
+```
+
+```{r, warning=FALSE}
+plot(8)
+```
+
+```{r, warning=FALSE}
+plot(9)
+```
+
+```{r, warning=FALSE}
+plot(10)
+```
+
+```{r, warning=FALSE}
+plot(11)
+```
+
+```{r, warning=FALSE}
+plot(12)
+```
+
+```{r, warning=FALSE}
+plot(13)
+```
+
+```{r, warning=FALSE}
+plot(14)
+```
+
+```{r, warning=FALSE}
+plot(15)
+```
+
+```{r, warning=FALSE}
+plot(16)
+```
+
+```{r, warning=FALSE}
+plot(17)
+```
+
+```{r, warning=FALSE}
+plot(18)
+```
+
+```{r, warning=FALSE}
+plot(19)
+```
+
+```{r, warning=FALSE}
+plot(20)
+```
+
+<p dir="RTL">
+برداشت من از نمودارهای بالا این است که اوضاع اقتصادی در بخش ها تورم، رشد جی دی پی، جذب سرمایه، بازار بورس، میزان جمعیت کارمند و اشتغال زنان اصلا خوب نیست و هیچ روند رو به بهبودی هم در آنها مشاهده نمیشود!
+</p>
+
+*** 
+
+<h5 dir="RTL">
+۶. در قسمت قبل با استفاده از روش خوشه بندی k-means داده ها را به سه دسته تقسیم کنید. ایران در کدام دسته می گنجد؟ (پیش از خوشه بندی طبیعتا داده را باید پاکسازی و استاندارد سازی نمایید.)
+</h5>
+
+<h6 dir="RTL">
+پاسخ:
+</h6>
+
+<p dir="RTL">
+ابتدا داده ها را به فرمت استاندارد در میاوریم به طوری که هر ستون نشانگر یک شاخص اقتصادی و هر سطر نشانگر یک کشور باشد:
+</p>
+
+```{r, warning=FALSE}
+Data %>%
+  filter(`Indicator Code` %in% indicators) %>%
+  mutate(`Value` = rowMeans(select(., `1990`:`2017`), na.rm = T)) %>%
+  select(`Country Name`, `Indicator Name`, Value) %>%
+  spread(`Indicator Name`, Value) %>%
+  na.omit() -> tmp
+```
+
+<p dir="RTL">
+سپس باید ستون ها را نرمال کنیم. به نحوی که میانگین همه ی آنها ۰ و انحراف معیارشان ۱ باشد:
+</p>
+
+```{r, warning=FALSE}
+for (i in 2:ncol(tmp))
+{
+  s = sd(unlist(tmp[,i]))
+  mean = mean(unlist(tmp[,i]))
+  tmp[,i] = (tmp[,i]-mean)/s
+}
+```
+
+<p dir="RTL">
+حالا میتوانیم خوشه بندی را انجام دهیم:
+</p>
+
+```{r, warning=FALSE}
+clusters = kmeans(tmp[,-1], iter.max =500, centers = 3)
+tmp$cluster = clusters$cluster
+```
+
+<p dir="RTL">
+کشورهای خوشه اول:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(cluster==1) -> tmp1
+tmp1$`Country Name`
+```
+<p dir="RTL">
+کشورهای خوشه دوم:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(cluster==2) -> tmp2
+tmp2$`Country Name`
+```
+<p dir="RTL">
+و کشورهای خوشه ی سوم:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(cluster==3) -> tmp3
+tmp3$`Country Name`
+```
+***
+
+<h5 dir="RTL">
+۷. به وسیله تحلیل مولفه اصلی بعد داده را به دو کاهش دهید سپس خوشه های به دست آمده در قسمت قبل را بر روی آن نمایش دهید. آیا عملکرد روش خوشه بندی شما مطلوب بوده است؟
+</h5>
+
+<h6 dir="RTL">
+پاسخ:
+</h6>
+
+<p dir="RTL">
+ابتدا روی دیتافریم 
+tmp 
+از سوال قبل (به جز ستون مربوط به نام و شماره خوشه) پی سی ای میزنیم:
+</p>
+
+```{r, warning=FALSE}
+pca = prcomp(tmp[,2:21], center=T, scale. = T)
+data = as.data.frame(pca$x)
+```
+
+<p dir="RTL">
+حالا میتوانیم نمودار 
+biplot 
+اطلاعات را رسم کنیم:
+</p>
+```{r, warning=FALSE, dpi=300}
+`Cluster Number` = as.factor(tmp$cluster)
+ggbiplot(pca, labels=tmp$`Country Name`,
+         groups=`Cluster Number`, size=10) + 
+  geom_point(size=.1) + theme_bw()
+```
+
+<p dir="RTL">
+آنطور که از نمودار برمی آید، دسته های درون یک خوشه به خوبی تشخیص داده شده اند.
+</p>
+
+***
+
+<h5 dir="RTL">
+۸. با استفاده از داده روشی برای پیش بینی رشد اقتصادی ایران در سال آینده ارائه دهید.
+</h5>
+
+<h6 dir="RTL">
+پاسخ:
+</h6>
+
+<p dir="RTL"> 
+ابتدا فرما داده ها را برای ساخت مدل خطی درست میکنیم:
+</p>
+```{r, warning=FALSE, dpi=300}
+Data %>%
+  filter(`Country Name`=="Iran, Islamic Rep.") %>%
+  filter(`Indicator Code` %in% indicators) %>%
+  select(`Indicator Name`, `1960`:`2017`) %>%
+  t() %>%
+  as.data.frame() -> tmp
+
+colnames(tmp) = t(tmp[1,])
+tmp = tmp[-1, ]
+
+tmp %>%
+  mutate(Year = rownames(.)) %>%
+  select(Year, `Agriculture, value added (% of GDP)`:`Stocks traded, total value (% of GDP)`) %>%
+  mutate(nextGDPGrowth = lead(`GDP growth (annual %)`))-> tmp
+
+col_names <- names(tmp)
+tmp[,col_names] <- lapply(tmp[,col_names] , as.character)
+tmp[,col_names] <- lapply(tmp[,col_names] , as.numeric)
+```
+<p dir="RTL"> 
+حالا سعی می کنیم مدل را طوری بسازیم که درصد رشد 
+GDP 
+را بر اساس 
+۱۲ 
+شاخص مهم اقتصادی سال قبلش توصیف کند. این ۱۲ شاخص عبارتند از:
+</p>
+1- Real interest rate
+</br>
+2- Industry, value added
+</br>
+3- GDP
+</br>
+4- GDP growth
+</br>
+5- Exports of goods and services
+</br>
+6- Imports of goods and services
+</br>
+7- Services, etc., value added
+</br>
+8- Agriculture, value added
+</br>
+9- Broad money
+</br>
+10- Domestic credit to private sector
+</br>
+11- Net taxes on products
+</br>
+12- Inflation, consumer prices
+
+```{r, warning=FALSE}
+model = lm(nextGDPGrowth ~
+             `Real interest rate (%)`+
+             `Industry, value added (% of GDP)`+
+             `GDP (current US$)`+
+             `GDP growth (annual %)`+
+             `Exports of goods and services (% of GDP)`+
+             `Imports of goods and services (% of GDP)`+
+             `Services, etc., value added (% of GDP)`+
+             `Agriculture, value added (% of GDP)`+
+             `Broad money (% of GDP)`+
+             `Domestic credit to private sector (% of GDP)`+
+             `Net taxes on products (current US$)`+
+             `Inflation, consumer prices (annual %)`,
+           data=tmp)
+
+
+tmp$PredictGDPGrowth = predict(model, tmp)
+```
+
+<p dir="RTL"> 
+پیش بینی مدل برای رشد اقتصادی ایران در سال ۲۰۱۷ برابر است با:
+</p>
+```{r, warning=FALSE}
+tmp$PredictGDPGrowth[57]
+```
+<p dir="RTL"> 
+که با توجه به رشد واقعی ایران که ۴.۲ درصد بود، مدل پیش بینی مناسبی ارائه میدهد. خطای پیش بینی مدل برای رشد اقتصادی سال ۲۰۱۷ تنها ۹.۵ درصد است.
+</p>
+***
+
+<h5 dir="RTL"> 
+۹. سوالهای ۵ تا ۷ را ابتدا برای ۲۰ شاخص سلامت سپس بر حسب ۲۰ شاخص آموزشی تکرار کنید.
+</h5>
+<h6 dir="RTL">
+پاسخ:
+</h6>
+<p dir="RTL">
+در حوزه ی بهداشت و سلامت، شاخص های مورد بررسی عبارتند از:
+</p>
+1- Life expectancy at birth
+</br>
+2- Fertility rate
+</br>
+3- Contraceptive prevalence
+</br>
+4- Death rate
+</br>
+5- Age dependency ratio
+</br>
+6- Health expenditure per capita
+</br>
+7- Adjusted savings: particulate emission damage
+</br>
+8- Physicians
+</br>
+9- Hospital beds
+</br>
+10- People using safely managed drinking water services
+</br>
+11- Depth of the food deficit
+</br>
+12- Prevalence of undernourishment
+</br>
+13- Prevalence of anemia among children
+</br>
+14- Prevalence of undernourishment
+</br>
+15- Prevalence of HIV
+</br>
+16- Diabetes prevalence
+</br>
+17- Immunization, DPT
+</br>
+18- Immunization, HepB3
+</br>
+19- Immunization, measles
+</br>
+20- Incidence of tuberculosis
+
+<p dir="RTL">
+نمودار وضعیت ایران نسبت به جهان در این شاخص ها به صورت زیر است:
+</p>
+
+```{r, warning=FALSE}
+indicators2 = c("SP.DYN.LE00.IN", 
+               "SP.DYN.TFRT.IN",
+               "SP.DYN.CONU.ZS",
+               "SP.DYN.CDRT.IN",
+               "SP.POP.DPND",
+               "SH.XPD.CHEX.PP.CD",
+               "NY.ADJ.DPEM.GN.ZS",
+               "SH.MED.PHYS.ZS",
+               "SH.MED.BEDS.ZS",
+               "SH.H2O.SMDW.ZS",
+               "SN.ITK.DFCT",
+               "SN.ITK.DEFC.ZS",
+               "SH.ANM.CHLD.ZS",
+               "SN.ITK.DEFC.ZS",
+               "SH.DYN.AIDS.ZS",
+               "SH.STA.DIAB.ZS",
+               "SH.IMM.IDPT",
+               "SH.IMM.HEPB",
+               "SH.IMM.MEAS",
+               "SH.TBS.INCD")
+
+
+plot = function(i)
+{
+  Code = indicators2[i]
+  Data %>%
+    filter(`Indicator Code`==Code) %>%
+    select(`Indicator Name`, `Country Name`, `1990`:`2017`) %>%
+    gather(`Year`, `Value`, `1990`:`2017`) -> tmp
+  
+  tmp %>%
+    filter(`Country Name`=="Iran, Islamic Rep.") -> tmp2
+  
+  hcboxplot(x = tmp$`Value`, var = tmp$`Year`,
+            outliers = FALSE, name="World") %>% 
+    hc_chart(type = "column") %>%
+    hc_add_series(tmp2$`Value`, type="spline", name="Iran") %>%
+    hc_xAxis(title = list(text = "Year")) %>%
+    hc_yAxis(title = list(text = tmp$`Indicator Name`[1])) %>%
+    hc_add_theme(hc_theme_ffx())
+}
+
+plot(1)
+plot(2)
+plot(3)
+plot(4)
+plot(5)
+plot(6)
+plot(7)
+plot(8)
+plot(9)
+plot(10)
+plot(11)
+plot(12)
+plot(13)
+plot(14)
+plot(15)
+plot(16)
+plot(17)
+plot(18)
+plot(19)
+plot(20)
+```
+<p dir="RTL">
+خوشه بندی کشورها هم به صورت زیر است:
+</p>
+
+```{r, warning=FALSE}
+Data %>%
+  filter(`Indicator Code` %in% indicators2) %>%
+  mutate(`Value` = rowMeans(select(., `1990`:`2017`), na.rm = T)) %>%
+  select(`Country Name`, `Indicator Name`, Value) %>%
+  spread(`Indicator Name`, Value) %>%
+  na.omit() -> tmp
+
+for (i in 2:ncol(tmp))
+{
+  s = sd(unlist(tmp[,i]))
+  mean = mean(unlist(tmp[,i]))
+  tmp[,i] = (tmp[,i]-mean)/s
+}
+
+clusters = kmeans(tmp[,-1], iter.max =500, centers = 3)
+tmp$cluster = clusters$cluster
+```
+
+<p dir="RTL">
+کشورهای خوشه اول:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(cluster==1) -> tmp1
+tmp1$`Country Name`
+```
+<p dir="RTL">
+کشورهای خوشه دوم:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(cluster==2) -> tmp2
+tmp2$`Country Name`
+```
+<p dir="RTL">
+و کشورهای خوشه ی سوم:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(cluster==3) -> tmp3
+tmp3$`Country Name`
+```
+
+<p dir="RTL">
+نمایش خوشه ها روی نمودار 
+biplot 
+دو مولفه ی اصلی هم به این صورت است:
+</p>
+
+```{r, warning=FALSE, dpi=300}
+pca = prcomp(tmp[,2:21], center=T, scale. = T)
+data = as.data.frame(pca$x)
+
+
+`Cluster Number` = as.factor(tmp$cluster)
+ggbiplot(pca, labels=tmp$`Country Name`,
+         groups=`Cluster Number`, size=10) + 
+  geom_point(size=.1) + theme_bw()
+```
+<p dir="RTL">
+از نمودارهای مربوط به بهداشت و سلامت، اینطور به نظر میرسد که پیشرفت ایران در این حوزه در چند دهه ی اخیر بسیار چشمگیر بوده و الآن جایگاهی هم تراز با کشورهای پیشرفته دنیا دارد.
+</p>
+
+<p dir="RTL">
+در حوزه ی آموزش، شاخص های مورد بررسی عبارتند از:
+</p>
+1- Government expenditure on education
+</br>
+2- Research and development expenditure
+</br>
+3- Adjusted savings: education expenditure
+</br>
+4- Compulsory education, duration
+</br>
+5- Over-age students, primary
+</br>
+6- Gender Parity Index (GPI), based on school enrollment, primary and secondary (gross)
+</br>
+7- School enrollment, preprimary
+</br>
+8- School enrollment, primary
+</br>
+9- School enrollment, secondary
+</br>
+10- School enrollment, tertiary
+</br>
+11- Expenditure on primary education
+</br>
+12- Expenditure on secondary education
+</br>
+13- Expenditure on tertiary education
+</br>
+14- Children out of school
+</br>
+15- Literacy rate, adult total
+
+<p dir="RTL">
+نمودار وضعیت ایران نسبت به جهان در این شاخص ها به صورت زیر است:
+</p>
+
+```{r, warning=FALSE}
+indicators3 = c("SE.XPD.TOTL.GD.ZS", 
+                "GB.XPD.RSDV.GD.ZS",
+                "NY.ADJ.AEDU.GN.ZS",
+                "SE.COM.DURS",
+                "SE.PRM.OENR.ZS",
+                "SE.ENR.PRSC.FM.ZS",
+                "SE.PRE.ENRR",
+                "SE.PRM.ENRR",
+                "SE.SEC.ENRR",
+                "SE.TER.ENRR",
+                "SE.XPD.PRIM.ZS",
+                "SE.XPD.SECO.ZS",
+                "SE.XPD.TERT.ZS",
+                "SE.PRM.UNER.ZS",
+                "SE.ADT.LITR.ZS")
+
+
+plot = function(i)
+{
+  Code = indicators3[i]
+  Data %>%
+    filter(`Indicator Code`==Code) %>%
+    select(`Indicator Name`, `Country Name`, `1990`:`2017`) %>%
+    gather(`Year`, `Value`, `1990`:`2017`) -> tmp
+  
+  tmp %>%
+    filter(`Country Name`=="Iran, Islamic Rep.") -> tmp2
+  
+  hcboxplot(x = tmp$`Value`, var = tmp$`Year`,
+            outliers = FALSE, name="World") %>% 
+    hc_chart(type = "column") %>%
+    hc_add_series(tmp2$`Value`, type="spline", name="Iran") %>%
+    hc_xAxis(title = list(text = "Year")) %>%
+    hc_yAxis(title = list(text = tmp$`Indicator Name`[1])) %>%
+    hc_add_theme(hc_theme_ffx())
+}
+
+plot(1)
+plot(2)
+plot(3)
+plot(4)
+plot(5)
+plot(6)
+plot(7)
+plot(8)
+plot(9)
+plot(10)
+plot(11)
+plot(12)
+plot(13)
+plot(14)
+plot(15)
+```
+<p dir="RTL">
+خوشه بندی کشورها هم به صورت زیر است:
+</p>
+
+```{r, warning=FALSE}
+Data %>%
+  filter(`Indicator Code` %in% indicators3) %>%
+  mutate(`Value` = rowMeans(select(., `1990`:`2017`), na.rm = T)) %>%
+  select(`Country Name`, `Indicator Name`, Value) %>%
+  spread(`Indicator Name`, Value) %>%
+  na.omit() -> tmp
+
+for (i in 2:ncol(tmp))
+{
+  s = sd(unlist(tmp[,i]))
+  mean = mean(unlist(tmp[,i]))
+  tmp[,i] = (tmp[,i]-mean)/s
+}
+
+clusters = kmeans(tmp[,-1], iter.max =500, centers = 3)
+tmp$cluster = clusters$cluster
+```
+
+<p dir="RTL">
+کشورهای خوشه اول:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(cluster==1) -> tmp1
+tmp1$`Country Name`
+```
+<p dir="RTL">
+کشورهای خوشه دوم:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(cluster==2) -> tmp2
+tmp2$`Country Name`
+```
+<p dir="RTL">
+و کشورهای خوشه ی سوم:
+</p>
+```{r, warning=FALSE}
+tmp %>%
+  filter(cluster==3) -> tmp3
+tmp3$`Country Name`
+```
+
+<p dir="RTL">
+نمایش خوشه ها روی نمودار 
+biplot 
+دو مولفه ی اصلی هم به این صورت است:
+</p>
+
+```{r, warning=FALSE, dpi=300}
+pca = prcomp(tmp[,2:16], center=T, scale. = T)
+data = as.data.frame(pca$x)
+
+
+`Cluster Number` = as.factor(tmp$cluster)
+ggbiplot(pca, labels=tmp$`Country Name`,
+         groups=`Cluster Number`, size=10) + 
+  geom_point(size=.1) + theme_bw()
+```
+<p dir="RTL">
+برداشت من از نمودارها این است که ایران به آموزش عالی بسیار توجه دارد و بیشتر بودجه ی آموزشی اش را برای مقاطع بالاتر میگذارد. اما در کل بودجه ی آموزشی و پژوهشی، درصد کمی از تولید ناخالص داخلی ایران را به نسبت دنیا تشکیل میدهد و در بخش آموزش های ابتدایی هم بودجه ی کمی مصرف میشود.
+</p>
+***
+
+<h5 dir="RTL"> 
+۱۰. کشورهای دنیا را بر حسب ۶۰ شاخص اقتصادی، سلامت و آموزش با روش سلسله مراتبی خوشه بندی کرده و دندروگرام آن را رسم نمایید. اگر داده ها بر سه دسته تقسیم شوند ایران در کدام دسته می گنجد؟
+</h5>
+
+<h6 dir="RTL">
+پاسخ:
+</h6>
+
+<p dir="RTL"> 
+ابتدا همه ی شاخص ها را با هم ترکیب میکنیم:
+</p>
+```{r, warning=FALSE}
+indicators = c(indicators, indicators2, indicators3)
+```
+<p dir="RTL"> 
+سپس داده های مربوط به این شاخص ها را مرتب میکنیم:
+</p>
+```{r, warning=FALSE}
+Data %>%
+  filter(`Indicator Code` %in% indicators) %>%
+  mutate(`Value` = rowMeans(select(., `2000`:`2017`), na.rm = T)) %>%
+  select(`Country Name`, `Indicator Name`, Value) %>%
+  spread(`Indicator Name`, Value) -> tmp
+```
+<p dir="RTL"> 
+تعداد بسیار کمی از کشورها وجود دارند که اطلاعات مربوط به همه ی ستون های آن ها موجود باشد. بنابراین باید ستونهایی با تعداد بالای 
+NA 
+را از داده ها حذف کنیم:
+</p>
+```{r, warning=FALSE}
+exclude=list()
+for (i in 2:ncol(tmp))
+{
+  x = sum(is.na(unlist(tmp[,i])))
+  if (x>140)
+    exclude = list.append(exclude, i)
+}
+exclude = unlist(exclude)
+
+tmp <- tmp[-exclude]
+
+tmp = as.data.frame(na.omit(tmp))
+
+rownames(tmp)=tmp$`Country Name`
+```
+<p dir="RTL"> 
+حالا باید داده ها را در هر ستون نرمال کنیم. به طوری که میانگینشان ۰ و انحراف معیارشان ۱ باشد:
+</p>
+```{r, warning=FALSE}
+for (i in 2:ncol(tmp))
+{
+  s = sd(unlist(tmp[,i]))
+  mean = mean(unlist(tmp[,i]))
+  tmp[,i] = (tmp[,i]-mean)/s
+}
+```
+<p dir="RTL"> 
+حالا میتوانیم خوشه بندی را انجام دهیم:
+</p>
+```{r, warning=FALSE}
+dist = stats::dist(tmp[-1], method = "euclidean")
+clus = hclust(dist,method = "complete")
+```
+<p dir="RTL"> 
+شماره خوشه ی هرکشور به صورت زیر است:
+</p>
+```{r, warning=FALSE}
+cutree(clus,k=3)
+```
+<p dir="RTL"> 
+دندروگرام خوشه بندی هم به صورت زیر میباشد:
+</p>
+```{r, warning=FALSE, dpi=300}
+colors = c("red", "purple", "blue")
+clus3 = cutree(clus, 3)
+graphics::plot(as.phylo(clus), cex = 1, label.offset = 0, tip.color = colors[clus3])
+```
+<p dir="RTL"> 
+که ایران در خوشه قرمزرنگ قرار دارد.
+</p>
+***
+
+<h5 dir="RTL"> 
+۱۱. سه یافته جالب از داده ها استخراج کنید.
+</h5>
+
+<h6 dir="RTL">
+پاسخ:
+</h6>
+```{r, warning=FALSE, dpi=300}
+Comparator = function(Code)
+{
+  Data %>%
+    filter(`Indicator Code`==Code) %>%
+    select(`Indicator Name`, `Country Name`, `1960`:`2017`) %>%
+    gather(`Year`, `Value`, `1960`:`2017`) %>%
+    na.omit()-> tmp
+  
+  tmp %>%
+    filter(`Country Name`=="Iran, Islamic Rep.") -> tmp2
+  
+  tmp %>%
+    filter(`Country Name`=="Japan") -> tmp3
+  
+  tmp %>%
+    filter(`Country Name`=="Turkey") -> tmp4
+  
+  tmp %>%
+    filter(`Country Name`=="United States") -> tmp5
+  
+  
+  
+  hcboxplot(x = tmp$`Value`, var = tmp$`Year`,
+            outliers = FALSE, name="World") %>% 
+    hc_chart(type = "column") %>%
+    hc_add_series(tmp2$`Value`, type="spline", name="Iran") %>%
+    hc_add_series(tmp3$`Value`, type="spline", name="Japan") %>%
+    hc_add_series(tmp4$`Value`, type="spline", name="Turkey") %>%
+    hc_add_series(tmp5$`Value`, type="spline", name="US") %>%
+    hc_xAxis(title = list(text = "Year")) %>%
+    hc_yAxis(title = list(text = tmp$`Indicator Name`[1])) %>%
+    hc_add_theme(hc_theme_ffx())
+}
+```
+<p dir="RTL"> 
+۱- ایرانی ها دوست دارند از ایران بروند!
+</p>
+```{r, warning=FALSE, dpi=300}
+Comparator("SM.POP.NETM")
+```
+
+<p dir="RTL"> 
+۲- توریستهای زیادی به دیدن ایران علاقه مند نیستند!
+</p>
+```{r, warning=FALSE, dpi=300}
+Comparator("ST.INT.ARVL")
+```
